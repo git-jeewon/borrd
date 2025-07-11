@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Borrd Folder Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .section { margin: 20px 0; padding: 15px; border: 1px solid #ccc; }
+        button { margin: 5px; padding: 10px; }
+        pre { background: #f5f5f5; padding: 10px; overflow-x: auto; }
+        .error { color: red; }
+        .success { color: green; }
+    </style>
+</head>
+<body>
+    <h1>Borrd Folder Diagnostics</h1>
+    
+    <div class="section">
+        <h2>1. Test Database Connection</h2>
+        <button onclick="testDatabase()">Check Database Status</button>
+        <div id="database-result"></div>
+    </div>
+
+    <div class="section">
+        <h2>2. Test Folder Creation</h2>
+        <input type="text" id="folder-name" placeholder="Folder name (e.g., 'projects')" value="test-projects">
+        <button onclick="createTestFolder()">Create Test Folder</button>
+        <div id="folder-create-result"></div>
+    </div>
+
+    <div class="section">
+        <h2>3. Test Folder Listing</h2>
+        <button onclick="listFolders()">List All Folders</button>
+        <div id="folder-list-result"></div>
+    </div>
+
+    <div class="section">
+        <h2>4. Test Folder URL Access</h2>
+        <input type="text" id="test-path" placeholder="Folder path (e.g., 'projects')" value="projects">
+        <button onclick="testFolderUrl()">Test Folder URL</button>
+        <div id="folder-url-result"></div>
+    </div>
+
+    <script>
+        const baseUrl = window.location.origin;
+
+        async function testDatabase() {
+            const resultDiv = document.getElementById('database-result');
+            resultDiv.innerHTML = 'Testing...';
+            
+            try {
+                const response = await fetch(`${baseUrl}/api/debug`);
+                const data = await response.json();
+                
+                let html = '<h3>Database Status:</h3>';
+                html += `<div class="${data.folders.exists ? 'success' : 'error'}">`;
+                html += `Folders table: ${data.folders.exists ? '✓ EXISTS' : '✗ MISSING'}</div>`;
+                html += `<div>Folders count: ${data.folders.count}</div>`;
+                if (data.folders.error) {
+                    html += `<div class="error">Error: ${data.folders.error}</div>`;
+                }
+                
+                html += `<div class="${data.pages.exists ? 'success' : 'error'}">`;
+                html += `Pages table: ${data.pages.exists ? '✓ EXISTS' : '✗ MISSING'}</div>`;
+                html += `<div>Pages count: ${data.pages.count}</div>`;
+                
+                html += '<h4>Test folder creation:</h4>';
+                html += `<div class="${data.testCreateFolder.success ? 'success' : 'error'}">`;
+                html += `${data.testCreateFolder.success ? '✓ CAN CREATE FOLDERS' : '✗ CANNOT CREATE FOLDERS'}</div>`;
+                if (data.testCreateFolder.error) {
+                    html += `<div class="error">Error: ${data.testCreateFolder.error}</div>`;
+                }
+                
+                html += '<h4>Raw Data:</h4>';
+                html += `<pre>${JSON.stringify(data, null, 2)}</pre>`;
+                
+                resultDiv.innerHTML = html;
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error">Error: ${error.message}</div>`;
+            }
+        }
+
+        async function createTestFolder() {
+            const resultDiv = document.getElementById('folder-create-result');
+            const folderName = document.getElementById('folder-name').value;
+            
+            if (!folderName) {
+                resultDiv.innerHTML = '<div class="error">Please enter a folder name</div>';
+                return;
+            }
+            
+            resultDiv.innerHTML = 'Creating folder...';
+            
+            try {
+                const response = await fetch(`${baseUrl}/api/folders`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: folderName })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    resultDiv.innerHTML = `<div class="success">✓ Folder "${folderName}" created successfully!</div>`;
+                } else {
+                    resultDiv.innerHTML = `<div class="error">✗ Error: ${data.error}</div>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error">✗ Error: ${error.message}</div>`;
+            }
+        }
+
+        async function listFolders() {
+            const resultDiv = document.getElementById('folder-list-result');
+            resultDiv.innerHTML = 'Loading folders...';
+            
+            try {
+                const response = await fetch(`${baseUrl}/api/folders`);
+                const data = await response.json();
+                
+                if (response.ok) {
+                    if (data.folders && data.folders.length > 0) {
+                        let html = `<div class="success">✓ Found ${data.folders.length} folders:</div>`;
+                        html += '<ul>';
+                        data.folders.forEach(folder => {
+                            html += `<li><strong>${folder.path}</strong> (${folder.name})`;
+                            if (folder.parent_id) html += ` - Parent ID: ${folder.parent_id}`;
+                            html += `</li>`;
+                        });
+                        html += '</ul>';
+                        html += `<pre>${JSON.stringify(data.folders, null, 2)}</pre>`;
+                        resultDiv.innerHTML = html;
+                    } else {
+                        resultDiv.innerHTML = '<div>No folders found. Try creating one first.</div>';
+                    }
+                } else {
+                    resultDiv.innerHTML = `<div class="error">✗ Error: ${data.error}</div>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error">✗ Error: ${error.message}</div>`;
+            }
+        }
+
+        async function testFolderUrl() {
+            const resultDiv = document.getElementById('folder-url-result');
+            const testPath = document.getElementById('test-path').value;
+            
+            if (!testPath) {
+                resultDiv.innerHTML = '<div class="error">Please enter a folder path</div>';
+                return;
+            }
+            
+            resultDiv.innerHTML = 'Testing folder URL...';
+            
+            try {
+                const response = await fetch(`${baseUrl}/${testPath}`);
+                
+                if (response.ok) {
+                    const html = await response.text();
+                    if (html.includes('Error') || html.includes('404')) {
+                        resultDiv.innerHTML = `<div class="error">✗ Folder URL not working. Page shows error.</div>`;
+                    } else {
+                        resultDiv.innerHTML = `<div class="success">✓ Folder URL working! <a href="/${testPath}" target="_blank">Visit /${testPath}</a></div>`;
+                    }
+                } else {
+                    resultDiv.innerHTML = `<div class="error">✗ Folder URL not found (${response.status})</div>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error">✗ Error: ${error.message}</div>`;
+            }
+        }
+
+        // Auto-run database test on page load
+        window.onload = () => {
+            testDatabase();
+        };
+    </script>
+</body>
+</html> 
