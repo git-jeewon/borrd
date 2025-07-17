@@ -2,7 +2,7 @@ import React from 'react';
 import Link from 'next/link';
 
 export default function LandingPage() {
-  return (
+    return (
     <div className="min-h-screen bg-zinc-50">
       {/* Hero Section */}
       <section className="flex items-center justify-center min-h-screen px-4 py-16">
@@ -14,7 +14,7 @@ export default function LandingPage() {
             Just Markdown. Just yours.
           </p>
           <Link 
-            href="/dashboard"
+            href="/login"
             className="inline-block px-8 py-4 bg-gray-900 text-white text-lg font-medium rounded-lg hover:bg-gray-800 transition-all duration-300 hover:scale-105 shadow-sm"
           >
             Log In / Sign Up
@@ -32,7 +32,7 @@ export default function LandingPage() {
             Publishing shouldn't feel like performing. There's no pressure here, no setup needed, just your words and your ownership of them. 
             We believe in writing without the weight of expectations—a place where your thoughts can exist simply because they're yours.
           </p>
-        </div>
+      </div>
       </section>
 
       {/* Made for you */}
@@ -46,14 +46,14 @@ export default function LandingPage() {
               <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-6">
                 <svg className="w-8 h-8 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zM21 5a2 2 0 00-2-2h-4a2 2 0 00-2 2v12a4 4 0 004 4h4a2 2 0 002-2V5z" />
-                </svg>
+              </svg>
               </div>
               <h3 className="text-xl font-medium text-gray-900 mb-4">Light customization</h3>
               <p className="text-gray-600 leading-relaxed">
                 Choose themes and fonts that feel right. No overwhelming options, just the essentials.
               </p>
             </div>
-            
+
             <div className="text-center">
               <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-6">
                 <svg className="w-8 h-8 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -64,13 +64,13 @@ export default function LandingPage() {
               <p className="text-gray-600 leading-relaxed">
                 Add metadata to your pages with simple frontmatter. Dates, tags, whatever you need.
               </p>
-            </div>
-            
+        </div>
+
             <div className="text-center">
               <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-6">
                 <svg className="w-8 h-8 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                </svg>
+              </svg>
               </div>
               <h3 className="text-xl font-medium text-gray-900 mb-4">Instant publishing</h3>
               <p className="text-gray-600 leading-relaxed">
@@ -95,19 +95,19 @@ export default function LandingPage() {
             <span className="flex items-center">
               <svg className="w-4 h-4 mr-2 text-green-500" fill="currentColor" viewBox="0 0 20 20">
                 <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-              </svg>
+                              </svg>
               Instant load times
             </span>
             <span className="flex items-center">
               <svg className="w-4 h-4 mr-2 text-green-500" fill="currentColor" viewBox="0 0 20 20">
                 <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-              </svg>
+                              </svg>
               No distractions
             </span>
             <span className="flex items-center">
               <svg className="w-4 h-4 mr-2 text-green-500" fill="currentColor" viewBox="0 0 20 20">
                 <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-              </svg>
+                              </svg>
               Just your pages
             </span>
           </div>
