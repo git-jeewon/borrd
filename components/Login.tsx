@@ -4,6 +4,7 @@ export default function Login() {
   const [identifier, setIdentifier] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
 
   // Validation function for email or phone number
   const isValidIdentifier = (value: string) => {
@@ -16,6 +17,7 @@ export default function Login() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setSuccessMessage('');
 
     // Validation
     if (!identifier.trim()) {
@@ -42,10 +44,15 @@ export default function Login() {
       const data = await response.json();
 
       if (data.success) {
-        // Redirect to dashboard on success
-        window.location.href = '/dashboard';
+        // Show success message about OTP being sent
+        setSuccessMessage(data.message || 'Check your email or phone for the verification code');
+        // For now, redirect to dashboard after showing message
+        // In a real app, you'd wait for OTP verification
+        setTimeout(() => {
+          window.location.href = '/dashboard';
+        }, 2000);
       } else {
-        setError('Login failed. Please try again.');
+        setError(data.error || 'Login failed. Please try again.');
       }
     } catch (error) {
       console.error('Login error:', error);
@@ -71,6 +78,9 @@ export default function Login() {
             />
             {error && (
               <p className="mt-3 text-sm text-red-600 text-center">{error}</p>
+            )}
+            {successMessage && (
+              <p className="mt-3 text-sm text-green-600 text-center">{successMessage}</p>
             )}
           </div>
 
