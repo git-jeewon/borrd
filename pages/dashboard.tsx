@@ -120,6 +120,45 @@ export default function Dashboard() {
     router.push('/login');
   };
 
+  const createFolder = async () => {
+    if (!newFolderName.trim()) return;
+
+    setIsCreatingFolder(true);
+    try {
+      const session = await supabase.auth.getSession();
+      const token = session.data.session?.access_token;
+
+      if (!token) {
+        alert('Authentication required');
+        return;
+      }
+
+      const response = await fetch('/api/folders', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({ name: newFolderName.trim() })
+      });
+
+      if (response.ok) {
+        // Reload data to show the new folder
+        await loadData();
+        setNewFolderName('');
+        setShowNewFolderInput(false);
+      } else {
+        const errorData = await response.json();
+        alert(errorData.error || 'Failed to create folder');
+      }
+    } catch (error) {
+      console.error('Error creating folder:', error);
+      alert('Failed to create folder');
+    } finally {
+      setIsCreatingFolder(false);
+    }
+  };
+
   // Helper function to truncate markdown content
   const truncateContent = (markdown: string, maxLength: number = 200) => {
     // Remove markdown syntax for preview
@@ -277,34 +316,7 @@ export default function Dashboard() {
     }
   }, [selectedItem, sidebarItems]);
 
-  const createFolder = async () => {
-    if (!newFolderName.trim()) return;
 
-    setIsCreatingFolder(true);
-    try {
-      const response = await fetch('/api/folders', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: newFolderName.trim() })
-      });
-
-      if (response.ok) {
-        const foldersResponse = await fetch('/api/folders');
-        const foldersData = await foldersResponse.json();
-        setFolders(foldersData.folders);
-        setNewFolderName('');
-        setShowNewFolderInput(false);
-      } else {
-        const errorData = await response.json();
-        alert(errorData.error || 'Failed to create folder');
-      }
-    } catch (error) {
-      console.error('Error creating folder:', error);
-      alert('Failed to create folder');
-    } finally {
-      setIsCreatingFolder(false);
-    }
-  };
 
   const movePageToFolder = async (pageId: number, targetFolderId: number | null) => {
     try {
@@ -465,14 +477,63 @@ export default function Dashboard() {
             </div>
 
             {!sidebarCollapsed && (
-              <Link 
-                href="/editor" 
-                className="block w-full px-3 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 transition-colors text-center"
-              >
-                New Page
-              </Link>
+              <div className="space-y-2">
+                <Link 
+                  href="/editor" 
+                  className="block w-full px-3 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 transition-colors text-center"
+                >
+                  New Page
+                </Link>
+                <button
+                  onClick={() => setShowNewFolderInput(!showNewFolderInput)}
+                  className="block w-full px-3 py-2 bg-green-600 text-white text-sm font-medium rounded-md hover:bg-green-700 transition-colors text-center"
+                >
+                  Add Folder
+                </button>
+              </div>
             )}
           </div>
+
+          {/* New Folder Input */}
+          {!sidebarCollapsed && showNewFolderInput && (
+            <div className="px-4 pb-4">
+              <div className="space-y-2">
+                <input
+                  type="text"
+                  value={newFolderName}
+                  onChange={(e) => setNewFolderName(e.target.value)}
+                  placeholder="Folder name"
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') createFolder();
+                    if (e.key === 'Escape') {
+                      setShowNewFolderInput(false);
+                      setNewFolderName('');
+                    }
+                  }}
+                  autoFocus
+                />
+                <div className="flex space-x-2">
+                  <button
+                    onClick={createFolder}
+                    disabled={isCreatingFolder || !newFolderName.trim()}
+                    className="flex-1 px-3 py-2 bg-green-600 text-white text-sm rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {isCreatingFolder ? 'Creating...' : 'Create'}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowNewFolderInput(false);
+                      setNewFolderName('');
+                    }}
+                    className="px-3 py-2 bg-gray-300 text-gray-700 text-sm rounded-md hover:bg-gray-400 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Sidebar Content */}
           <div className="flex-1 overflow-y-auto">
