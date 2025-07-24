@@ -34,7 +34,7 @@ export default function Editor() {
   const slugInputRef = useRef<HTMLInputElement>(null);
   const suggestionsRef = useRef<HTMLDivElement>(null);
 
-    // Debounced search for slugs (pages only, since folders don't have URLs)
+  // Debounced search for slugs (pages only, since folders don't have URLs)
   const searchSlugs = useCallback(
     debounce(async (searchTerm: string) => {
       if (!searchTerm.trim()) {
