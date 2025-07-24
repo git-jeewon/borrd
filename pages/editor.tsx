@@ -30,9 +30,7 @@ export default function Editor() {
   const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(-1);
   const [pageExists, setPageExists] = useState(false);
 
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const audioInputRef = useRef<HTMLInputElement>(null);
-  const videoInputRef = useRef<HTMLInputElement>(null);
+  const mediaInputRef = useRef<HTMLInputElement>(null);
   const slugInputRef = useRef<HTMLInputElement>(null);
   const suggestionsRef = useRef<HTMLDivElement>(null);
 
@@ -464,36 +462,25 @@ export default function Editor() {
     }
   };
 
-  const handleImageSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleMediaSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
-      uploadFile(file, 'image');
+      // Auto-detect file type based on MIME type
+      if (file.type.startsWith('image/')) {
+        uploadFile(file, 'image');
+      } else if (['audio/mp3', 'audio/wav', 'audio/mpeg', 'audio/ogg', 'audio/m4a'].includes(file.type)) {
+        uploadFile(file, 'audio');
+      } else if (['video/mp4', 'video/quicktime', 'video/webm', 'video/avi', 'image/heic', 'image/heif'].includes(file.type)) {
+        uploadFile(file, 'video');
+      } else {
+        alert('Unsupported file type. Please select an image (PNG, JPEG, HEIC), audio (MP3, WAV, M4A), or video (MP4, MOV, WebM) file.');
+        return;
+      }
     }
-    // Reset input value to allow selecting the same file again
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
-  };
-
-  const handleAudioSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      uploadFile(file, 'audio');
-    }
-    // Reset input value to allow selecting the same file again
-    if (audioInputRef.current) {
-      audioInputRef.current.value = '';
-    }
-  };
-
-  const handleVideoSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      uploadFile(file, 'video');
-    }
-    // Reset input value to allow selecting the same file again
-    if (videoInputRef.current) {
-      videoInputRef.current.value = '';
+    
+    // Reset the input so the same file can be selected again
+    if (mediaInputRef.current) {
+      mediaInputRef.current.value = '';
     }
   };
 
@@ -632,46 +619,21 @@ export default function Editor() {
                 <h2 className="text-lg font-semibold text-gray-900">Editor</h2>
                 <div className="flex items-center space-x-2">
                   <input
-                    ref={fileInputRef}
+                    ref={mediaInputRef}
                     type="file"
-                    accept="image/*"
-                    onChange={handleImageSelect}
-                    className="hidden"
-                  />
-                  <input
-                    ref={audioInputRef}
-                    type="file"
-                    accept=".mp3,.wav"
-                    onChange={handleAudioSelect}
-                    className="hidden"
-                  />
-                  <input
-                    ref={videoInputRef}
-                    type="file"
-                    accept="video/*"
-                    onChange={handleVideoSelect}
+                    accept="image/*,audio/*,video/*,.heic,.heif"
+                    onChange={handleMediaSelect}
                     className="hidden"
                   />
                   <button
-                    onClick={() => fileInputRef.current?.click()}
+                    onClick={() => mediaInputRef.current?.click()}
                     disabled={isUploading}
-                    className="px-3 py-1 text-sm bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center space-x-1"
                   >
-                    {isUploading ? 'Uploading...' : 'Image'}
-                  </button>
-                  <button
-                    onClick={() => audioInputRef.current?.click()}
-                    disabled={isUploading}
-                    className="px-3 py-1 text-sm bg-purple-600 text-white rounded hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  >
-                    {isUploading ? 'Uploading...' : 'Audio'}
-                  </button>
-                  <button
-                    onClick={() => videoInputRef.current?.click()}
-                    disabled={isUploading}
-                    className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  >
-                    {isUploading ? 'Uploading...' : 'Video'}
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                    </svg>
+                    <span>{isUploading ? 'Uploading...' : 'Upload'}</span>
                   </button>
                 </div>
               </div>
@@ -684,7 +646,7 @@ export default function Editor() {
                 onDragLeave={handleDrag}
                 onDragOver={handleDrag}
                 onDrop={handleDrop}
-                placeholder="Write your Markdown content here... Drag and drop images, audio, or video files here or use the upload buttons above."
+                placeholder="Write your Markdown content here... Drag and drop media files here or use the upload button above."
                 className={`w-full h-full min-h-[500px] p-4 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none font-mono text-sm ${
                   dragActive ? 'border-blue-500 bg-blue-50' : ''
                 }`}
