@@ -24,10 +24,10 @@ export default function NotFoundPage({ requestedPath }: NotFoundPageProps) {
       <div className="text-center">
         <h1 className="text-4xl font-bold text-gray-900 mb-4">404 - Page Not Found</h1>
         <p className="text-gray-600 mb-6">
-          The page "{requestedPath}" could not be found.
+          The page &quot;{requestedPath}&quot; could not be found.
         </p>
         <p className="text-gray-500 mb-8">
-          Folders are now used only for organization in the dashboard and don't create public URLs.
+          Folders are now used only for organization in the dashboard and don&apos;t create public URLs.
         </p>
         <Link 
           href="/" 

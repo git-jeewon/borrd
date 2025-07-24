@@ -5,6 +5,35 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+interface DebugResponse {
+  folders: {
+    exists: boolean;
+    error?: string;
+    count: number;
+    data: unknown[];
+  };
+  pages: {
+    exists: boolean;
+    error?: string;
+    count: number;
+    activePagesCount: number;
+    data: unknown[];
+  };
+  foldersSchema: {
+    error?: string;
+    columns: unknown[];
+  };
+  pagesSchema: {
+    error?: string;
+    columns: unknown[];
+  };
+  testCreateFolder: {
+    success: boolean;
+    error?: string;
+    data?: unknown;
+  };
+}
+
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
@@ -14,7 +43,7 @@ export default async function handler(
   }
 
   try {
-    const debug: any = {};
+    const debug: Partial<DebugResponse> = {};
 
     // Check if folders table exists and what data it contains
     try {
@@ -29,10 +58,10 @@ export default async function handler(
         count: folders?.length || 0,
         data: folders || []
       };
-    } catch (error) {
+    } catch (err) {
       debug.folders = {
         exists: false,
-        error: (error as any)?.message,
+        error: (err as Error)?.message,
         count: 0,
         data: []
       };
@@ -52,11 +81,12 @@ export default async function handler(
         activePagesCount: pages?.filter(p => !p.deleted_at).length || 0,
         data: pages || []
       };
-    } catch (error) {
+    } catch (err) {
       debug.pages = {
         exists: false,
-        error: (error as any)?.message,
+        error: (err as Error)?.message,
         count: 0,
+        activePagesCount: 0,
         data: []
       };
     }
@@ -70,7 +100,7 @@ export default async function handler(
         error: foldersSchemaError?.message,
         columns: foldersSchema || []
       };
-    } catch (error) {
+    } catch {
       debug.foldersSchema = {
         error: 'Could not get folders schema',
         columns: []
@@ -85,7 +115,7 @@ export default async function handler(
         error: pagesSchemaError?.message,
         columns: pagesSchema || []
       };
-    } catch (error) {
+    } catch {
       debug.pagesSchema = {
         error: 'Could not get pages schema',
         columns: []
@@ -118,20 +148,20 @@ export default async function handler(
           .delete()
           .eq('name', testFolderName);
       }
-    } catch (error) {
+    } catch (err) {
       debug.testCreateFolder = {
         success: false,
-        error: (error as any)?.message
+        error: (err as Error)?.message
       };
     }
 
     return res.status(200).json(debug);
 
-  } catch (error) {
-    console.error('Debug API error:', error);
+  } catch (err) {
+    console.error('Debug API error:', err);
     return res.status(500).json({ 
       error: 'Internal server error',
-      details: (error as any)?.message 
+      details: (err as Error)?.message 
     });
   }
 } 

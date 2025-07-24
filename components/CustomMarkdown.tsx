@@ -10,7 +10,7 @@ interface CustomMarkdownProps {
 export default function CustomMarkdown({ children }: CustomMarkdownProps) {
   // Custom renderer for audio and video tags
   const components = {
-    p: ({ children, ...props }: any) => {
+    p: ({ children, ...props }: React.ComponentProps<'p'>) => {
       // Convert children to string to check for media tags
       const content = React.Children.toArray(children)
         .map(child => {

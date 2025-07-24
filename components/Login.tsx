@@ -53,7 +53,7 @@ export default function Login({ onSuccess }: LoginProps) {
           setPassword('');
         }
       }
-    } catch (err) {
+    } catch {
       setError('An unexpected error occurred');
     } finally {
       setLoading(false);

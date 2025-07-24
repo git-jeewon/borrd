@@ -8,9 +8,12 @@ export default function AudioPlayer({ src }: AudioPlayerProps) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isWaveformReady, setIsWaveformReady] = useState(false);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [currentRegion, setCurrentRegion] = useState<any>(null);
   const waveformRef = useRef<HTMLDivElement>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const wavesurferRef = useRef<any>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [wavesurfer, setWavesurfer] = useState<any>(null);
 
   // Initialize WaveSurfer on client side only
@@ -66,7 +69,7 @@ export default function AudioPlayer({ src }: AudioPlayerProps) {
           setIsPlaying(true);
         });
 
-        ws.on('error', (error: any) => {
+        ws.on('error', (error: Error) => {
           console.error('WaveSurfer error:', error);
           setIsLoading(false);
         });
@@ -88,6 +91,7 @@ export default function AudioPlayer({ src }: AudioPlayerProps) {
           
           // Only create region if we have the regions plugin available
           try {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const newRegion = (ws as any).addRegion({
               start: start,
               end: end,
@@ -105,7 +109,7 @@ export default function AudioPlayer({ src }: AudioPlayerProps) {
             });
             
             setCurrentRegion(newRegion);
-          } catch (error) {
+          } catch {
             console.log('Regions plugin not available, skipping region creation');
           }
         });
@@ -132,7 +136,7 @@ export default function AudioPlayer({ src }: AudioPlayerProps) {
         wavesurferRef.current = null;
       }
     };
-  }, [src]);
+  }, [src, currentRegion]);
 
   const togglePlay = () => {
     if (!wavesurfer) return;

@@ -4,18 +4,10 @@ import { createClient } from '@supabase/supabase-js';
 import CustomMarkdown from '../components/CustomMarkdown';
 import matter from 'gray-matter';
 
-interface PageData {
-  id: number;
-  slug: string;
-  markdown: string;
-  created_at?: string;
-  updated_at?: string;
-}
-
 interface Frontmatter {
   font?: 'serif' | 'sans' | 'mono';
   background?: string;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 interface SlugPageProps {
@@ -92,7 +84,7 @@ export const getServerSideProps: GetServerSideProps<SlugPageProps> = async ({ pa
   }
 };
 
-export default function SlugPage({ content, frontmatter, slug, error }: SlugPageProps) {
+export default function SlugPage({ content, frontmatter, error }: SlugPageProps) {
   // Determine font class based on frontmatter
   const getFontClass = () => {
     switch (frontmatter.font) {

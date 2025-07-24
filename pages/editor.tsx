@@ -34,7 +34,7 @@ export default function Editor() {
   const slugInputRef = useRef<HTMLInputElement>(null);
   const suggestionsRef = useRef<HTMLDivElement>(null);
 
-  // Debounced search for slugs (pages only, since folders don't have URLs)
+    // Debounced search for slugs (pages only, since folders don't have URLs)
   const searchSlugs = useCallback(
     debounce(async (searchTerm: string) => {
       if (!searchTerm.trim()) {
@@ -84,11 +84,12 @@ export default function Editor() {
         console.error('Error searching slugs:', error);
       }
     }, 300),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     []
   );
 
   // Load content for a specific slug (page only)
-  const loadContentForSlug = async (selectedSlug: string) => {
+  const loadContentForSlug = useCallback(async (selectedSlug: string) => {
     if (!user) return;
     
     setIsLoadingContent(true);
@@ -126,7 +127,7 @@ export default function Editor() {
     } finally {
       setIsLoadingContent(false);
     }
-  };
+  }, [user]);
 
 
 
@@ -189,7 +190,7 @@ export default function Editor() {
         loadContentForSlug(slugFromUrl);
       }
     }
-  }, [router.isReady, router.query.slug]);
+  }, [router.isReady, router.query.slug, loadContentForSlug]);
 
   // Close suggestions when clicking outside
   useEffect(() => {
@@ -205,14 +206,19 @@ export default function Editor() {
   }, []);
 
   // Debounce utility function
-  function debounce<T extends (...args: any[]) => any>(
-    func: T,
+  function debounce(
+    func: (searchTerm: string) => Promise<void>,
     wait: number
-  ): (...args: Parameters<T>) => void {
+  ): (searchTerm: string) => Promise<void> {
     let timeout: NodeJS.Timeout;
-    return (...args: Parameters<T>) => {
+    return (searchTerm: string) => {
       clearTimeout(timeout);
-      timeout = setTimeout(() => func(...args), wait);
+      return new Promise<void>((resolve) => {
+        timeout = setTimeout(async () => {
+          await func(searchTerm);
+          resolve();
+        }, wait);
+      });
     };
   }
 
@@ -357,7 +363,7 @@ export default function Editor() {
 
       // Upload to Supabase Storage
       const bucketName = type === 'image' ? 'images' : type === 'audio' ? 'audio' : 'videos';
-      const { data, error } = await supabase.storage
+      const { error } = await supabase.storage
         .from(bucketName)
         .upload(fileName, processedFile);
 
@@ -404,9 +410,9 @@ export default function Editor() {
       console.error('Error constructor:', error?.constructor?.name);
       if (error && typeof error === 'object') {
         console.error('Error keys:', Object.keys(error));
-        console.error('Error message:', (error as any).message);
-        console.error('Error code:', (error as any).code);
-        console.error('Error status:', (error as any).status);
+        console.error('Error message:', (error as Error).message);
+        console.error('Error code:', (error as {code?: string}).code);
+        console.error('Error status:', (error as {status?: number}).status);
       }
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       alert(`Failed to upload ${type}: ${errorMessage}`);

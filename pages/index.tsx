@@ -58,8 +58,8 @@ export default function LandingPage() {
             Why Borrd exists
           </h2>
           <p className="text-lg text-gray-600 leading-relaxed">
-            Publishing shouldn't feel like performing. There's no pressure here, no setup needed, just your words and your ownership of them. 
-            We believe in writing without the weight of expectations—a place where your thoughts can exist simply because they're yours.
+            Publishing shouldn&apos;t feel like performing. There&apos;s no pressure here, no setup needed, just your words and your ownership of them. 
+            We believe in writing without the weight of expectations—a place where your thoughts can exist simply because they&apos;re yours.
           </p>
         </div>
       </section>

@@ -4,7 +4,6 @@ import { useRouter } from 'next/router';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../contexts/AuthContext';
 import ProtectedRoute from '../components/ProtectedRoute';
-import CustomMarkdown from '../components/CustomMarkdown';
 
 interface PageData {
   id: number;
@@ -41,26 +40,14 @@ export default function Dashboard() {
   const [folders, setFolders] = useState<FolderData[]>([]);
   const [selectedItem, setSelectedItem] = useState<string>('');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [selectedPageIndex, setSelectedPageIndex] = useState(0);
   const [newFolderName, setNewFolderName] = useState('');
   const [showNewFolderInput, setShowNewFolderInput] = useState(false);
   const [isCreatingFolder, setIsCreatingFolder] = useState(false);
-  const [isExporting, setIsExporting] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  
-  // Drag and drop state
-  const [draggedItem, setDraggedItem] = useState<{type: 'page' | 'folder', id: number, folderId?: number} | null>(null);
-  const [dropTarget, setDropTarget] = useState<string | null>(null);
-  const [isDragging, setIsDragging] = useState(false);
+
 
   const loadData = useCallback(async () => {
     try {
-      setLoading(true);
-      setError(null);
-
       if (!user) {
-        setLoading(false);
         return;
       }
 
@@ -69,8 +56,7 @@ export default function Dashboard() {
       const token = session.data.session?.access_token;
 
       if (!token) {
-        setError('Authentication token not found');
-        setLoading(false);
+        console.error('Authentication token not found');
         return;
       }
 
@@ -102,11 +88,8 @@ export default function Dashboard() {
       setFolders(foldersData.folders || []);
     } catch (err) {
       console.error('Error loading data:', err);
-      setError('Failed to load data');
-    } finally {
-      setLoading(false);
     }
-  }, [user?.id]); // Memoize based on user ID only
+  }, [user]);
 
   // Load data when user is authenticated
   useEffect(() => {
@@ -175,19 +158,7 @@ export default function Dashboard() {
     return plainText.length > maxLength ? plainText.substring(0, maxLength) + '...' : plainText;
   };
 
-  // Generate mock metadata for pages
-  const generatePageMetadata = (page: PageData) => {
-    // Generate consistent "random" data based on page ID
-    const seed = page.id;
-    const views = (seed * 7 + 42) % 1000 + 10;
-    const lastViewed = new Date(Date.now() - (seed * 1000 * 60 * 60 * 24) % (30 * 24 * 60 * 60 * 1000));
-    
-    return {
-      views,
-      lastViewed,
-      readTime: Math.max(1, Math.floor((page.markdown?.length || 0) / 200))
-    };
-  };
+
 
   // Build sidebar items list
   const sidebarItems = useMemo(() => {
@@ -304,10 +275,7 @@ export default function Dashboard() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [selectedItem, sidebarItems]);
 
-  // Reset page index when selection changes
-  useEffect(() => {
-    setSelectedPageIndex(0);
-  }, [selectedItem]);
+
 
   // Set initial selection when component loads
   useEffect(() => {
@@ -318,142 +286,11 @@ export default function Dashboard() {
 
 
 
-  const movePageToFolder = async (pageId: number, targetFolderId: number | null) => {
-    try {
-      const response = await fetch('/api/move-page', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pageId, folderId: targetFolderId })
-      });
 
-      if (response.ok) {
-        setPages(prevPages => 
-          prevPages.map(page => {
-            if (page.id === pageId) {
-              return { ...page, folder_id: targetFolderId };
-            }
-            return page;
-          })
-        );
-      } else {
-        const errorData = await response.json();
-        alert(errorData.error || 'Failed to move page');
-      }
-    } catch (error) {
-      console.error('Error moving page:', error);
-      alert('Failed to move page');
-    }
-  };
 
-  const restorePage = async (pageId: number) => {
-    try {
-      const response = await fetch('/api/delete-page', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pageId, restore: true })
-      });
 
-      if (response.ok) {
-        const restoredPage = deletedPages.find(p => p.id === pageId);
-        if (restoredPage) {
-          setDeletedPages(prev => prev.filter(p => p.id !== pageId));
-          setPages(prev => [...prev, { ...restoredPage, deleted_at: null }]);
-        }
-      } else {
-        alert('Failed to restore page');
-      }
-    } catch (error) {
-      console.error('Error restoring page:', error);
-      alert('Failed to restore page');
-    }
-  };
 
-  const exportPages = async (includeDeleted = false) => {
-    setIsExporting(true);
-    try {
-      const response = await fetch('/api/export', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ includeDeleted })
-      });
 
-      if (response.ok) {
-        const blob = await response.blob();
-        const url = window.URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `borrd-export-${new Date().toISOString().split('T')[0]}.zip`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        window.URL.revokeObjectURL(url);
-      } else {
-        alert('Failed to export pages');
-      }
-    } catch (error) {
-      console.error('Error exporting pages:', error);
-      alert('Failed to export pages');
-    } finally {
-      setIsExporting(false);
-    }
-  };
-
-  // Drag and drop handlers
-  const handleDragStart = (e: React.DragEvent, type: 'page' | 'folder', id: number, folderId?: number) => {
-    setDraggedItem({ type, id, folderId });
-    setIsDragging(true);
-  };
-
-  const handleDragEnd = () => {
-    setDraggedItem(null);
-    setDropTarget(null);
-    setIsDragging(false);
-  };
-
-  const handleDragOver = (e: React.DragEvent, targetId: string) => {
-    e.preventDefault();
-    if (draggedItem && (targetId.startsWith('folder-') || targetId === 'uncategorized')) {
-      setDropTarget(targetId);
-    }
-  };
-
-  const handleDrop = async (e: React.DragEvent, targetId: string) => {
-    e.preventDefault();
-    if (!draggedItem) return;
-
-    if (draggedItem.type === 'page') {
-      let folderId: number | null = null;
-      
-      if (targetId.startsWith('folder-')) {
-        folderId = parseInt(targetId.replace('folder-', ''));
-      } else if (targetId === 'uncategorized') {
-        folderId = null;
-      }
-      
-      await movePageToFolder(draggedItem.id, folderId);
-    }
-
-    setDraggedItem(null);
-    setDropTarget(null);
-    setIsDragging(false);
-  };
-
-  const getCurrentViewName = () => {
-    if (selectedItem === 'trash') return 'Trash';
-    if (selectedItem.startsWith('folder-')) {
-      const folderId = parseInt(selectedItem.replace('folder-', ''));
-      const folder = folders.find(f => f.id === folderId);
-      return folder ? folder.name : 'Unknown Folder';
-    }
-    if (selectedItem.startsWith('page-')) {
-      const pageId = parseInt(selectedItem.replace('page-', ''));
-      const page = pages.find(p => p.id === pageId);
-      return page ? page.slug : 'Unknown Page';
-    }
-    return 'Dashboard';
-  };
-
-  const isTrashView = selectedItem === 'trash';
 
     return (
     <ProtectedRoute>
@@ -644,7 +481,6 @@ export default function Dashboard() {
             ) : (
               <div className="max-w-4xl mx-auto space-y-6">
                 {displayedPages.map((page) => {
-                  const metadata = generatePageMetadata(page);
                   return (
                     <div 
                       key={page.id} 
@@ -706,7 +542,7 @@ export default function Dashboard() {
                             </div>
                           ) : (
                             <div className="text-gray-500 italic text-center py-8">
-                              This page is empty. Click "Edit" to add content.
+                              This page is empty. Click &quot;Edit&quot; to add content.
                             </div>
                           )}
                         </div>
