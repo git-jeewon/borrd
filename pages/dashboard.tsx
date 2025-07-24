@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useAuth } from '../contexts/AuthContext';
@@ -54,16 +54,7 @@ export default function Dashboard() {
   const [dropTarget, setDropTarget] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
 
-  // Load data when user is authenticated
-  useEffect(() => {
-    if (user) {
-      loadData();
-    }
-  }, [user]);
-
-
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -115,7 +106,14 @@ export default function Dashboard() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user?.id]); // Memoize based on user ID only
+
+  // Load data when user is authenticated
+  useEffect(() => {
+    if (user?.id) {
+      loadData();
+    }
+  }, [user?.id, loadData]);
 
   const handleSignOut = async () => {
     await signOut();
