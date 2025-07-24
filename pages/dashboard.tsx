@@ -1,7 +1,9 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { GetServerSideProps } from 'next';
 import Link from 'next/link';
-import { createClient } from '@supabase/supabase-js';
+import { useRouter } from 'next/router';
+import { useAuth } from '../contexts/AuthContext';
+import { supabase } from '../contexts/AuthContext';
+import ProtectedRoute from '../components/ProtectedRoute';
 import CustomMarkdown from '../components/CustomMarkdown';
 
 interface PageData {
@@ -21,13 +23,6 @@ interface FolderData {
   created_at: string;
 }
 
-interface DashboardProps {
-  pages: PageData[];
-  deletedPages: PageData[];
-  folders: FolderData[];
-  error?: string;
-}
-
 interface SidebarItem {
   id: string;
   type: 'folder' | 'page';
@@ -38,81 +33,12 @@ interface SidebarItem {
   level: number;
 }
 
-export const getServerSideProps: GetServerSideProps<DashboardProps> = async () => {
-  try {
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-    
-    if (!supabaseUrl || !supabaseServiceKey) {
-      return {
-        props: {
-          pages: [],
-          deletedPages: [],
-          folders: [],
-          error: 'Supabase configuration missing'
-        }
-      };
-    }
-
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
-
-    // Fetch all non-deleted pages with markdown content
-    const { data: pages, error: pagesError } = await supabase
-      .from('pages')
-      .select('*')
-      .is('deleted_at', null)
-      .order('created_at', { ascending: false });
-
-    // Fetch deleted pages
-    const { data: deletedPages, error: deletedError } = await supabase
-      .from('pages')
-      .select('*')
-      .not('deleted_at', 'is', null)
-      .order('deleted_at', { ascending: false });
-
-    // Fetch folders
-    const { data: folders, error: foldersError } = await supabase
-      .from('folders')
-      .select('*')
-      .order('created_at', { ascending: false });
-
-    if (pagesError || deletedError || foldersError) {
-      console.error('Error fetching data:', { pagesError, deletedError, foldersError });
-      return {
-        props: {
-          pages: [],
-          deletedPages: [],
-          folders: [],
-          error: 'Failed to load data'
-        }
-      };
-    }
-
-    return {
-      props: {
-        pages: pages || [],
-        deletedPages: deletedPages || [],
-        folders: folders || []
-      }
-    };
-
-  } catch (error) {
-    console.error('Unexpected error:', error);
-    return {
-      props: {
-        pages: [],
-        deletedPages: [],
-        folders: [],
-        error: 'Internal server error'
-      }
-    };
-  }
-};
-
-export default function Dashboard({ pages: initialPages, deletedPages: initialDeletedPages, folders: initialFolders, error }: DashboardProps) {
-  const [pages, setPages] = useState<PageData[]>(initialPages);
-  const [deletedPages, setDeletedPages] = useState<PageData[]>(initialDeletedPages);
-  const [folders, setFolders] = useState<FolderData[]>(initialFolders);
+export default function Dashboard() {
+  const { user, signOut } = useAuth();
+  const router = useRouter();
+  const [pages, setPages] = useState<PageData[]>([]);
+  const [deletedPages, setDeletedPages] = useState<PageData[]>([]);
+  const [folders, setFolders] = useState<FolderData[]>([]);
   const [selectedItem, setSelectedItem] = useState<string>('');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [selectedPageIndex, setSelectedPageIndex] = useState(0);
@@ -120,22 +46,81 @@ export default function Dashboard({ pages: initialPages, deletedPages: initialDe
   const [showNewFolderInput, setShowNewFolderInput] = useState(false);
   const [isCreatingFolder, setIsCreatingFolder] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   
   // Drag and drop state
   const [draggedItem, setDraggedItem] = useState<{type: 'page' | 'folder', id: number, folderId?: number} | null>(null);
   const [dropTarget, setDropTarget] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
 
-  if (error) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold text-gray-900 mb-4">Error</h1>
-          <p className="text-gray-600">{error}</p>
-        </div>
-      </div>
-    );
-  }
+  // Load data when user is authenticated
+  useEffect(() => {
+    if (user) {
+      loadData();
+    }
+  }, [user]);
+
+
+
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      if (!user) {
+        setLoading(false);
+        return;
+      }
+
+      // Get the current session token
+      const session = await supabase.auth.getSession();
+      const token = session.data.session?.access_token;
+
+      if (!token) {
+        setError('Authentication token not found');
+        setLoading(false);
+        return;
+      }
+
+      // Fetch user's pages
+      const pagesResponse = await fetch('/api/pages', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      // Fetch user's folders
+      const foldersResponse = await fetch('/api/folders', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!pagesResponse.ok || !foldersResponse.ok) {
+        throw new Error('Failed to fetch data');
+      }
+
+      const pagesData = await pagesResponse.json();
+      const foldersData = await foldersResponse.json();
+
+      setPages(pagesData.pages || []);
+      setDeletedPages(pagesData.deletedPages || []);
+      setFolders(foldersData.folders || []);
+    } catch (err) {
+      console.error('Error loading data:', err);
+      setError('Failed to load data');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSignOut = async () => {
+    await signOut();
+    router.push('/login');
+  };
 
   // Helper function to truncate markdown content
   const truncateContent = (markdown: string, maxLength: number = 200) => {
@@ -461,352 +446,220 @@ export default function Dashboard({ pages: initialPages, deletedPages: initialDe
   const isTrashView = selectedItem === 'trash';
 
     return (
-    <div className={`min-h-screen bg-gray-50 flex ${isDragging ? 'select-none' : ''}`}>
-      {/* Sidebar */}
-      <div className={`${sidebarCollapsed ? 'w-16' : 'w-80'} bg-white border-r border-gray-200 flex flex-col transition-all duration-300`}>
-        {/* Sidebar Header */}
-        <div className="p-4 border-b border-gray-200">
-          <div className="flex items-center justify-between mb-4">
-            <h1 className={`font-bold text-gray-900 transition-all duration-300 ${sidebarCollapsed ? 'text-lg' : 'text-2xl'}`}>
-              {sidebarCollapsed ? 'B' : 'Borrd'}
-            </h1>
-            <button
-              onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-              className="p-2 hover:bg-gray-100 rounded-md transition-colors"
-            >
-              <svg className={`w-4 h-4 transition-transform ${sidebarCollapsed ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-              </svg>
-            </button>
+    <ProtectedRoute>
+      <div className="min-h-screen bg-gray-50 flex">
+        {/* Sidebar */}
+        <div className={`${sidebarCollapsed ? 'w-16' : 'w-80'} bg-white border-r border-gray-200 flex flex-col transition-all duration-300`}>
+          {/* Sidebar Header */}
+          <div className="p-4 border-b border-gray-200">
+            <div className="flex items-center justify-between mb-4">
+              <h1 className={`font-bold text-gray-900 transition-all duration-300 ${sidebarCollapsed ? 'text-lg' : 'text-2xl'}`}>
+                {sidebarCollapsed ? 'B' : 'Borrd'}
+              </h1>
+              <button
+                onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+                className="p-2 hover:bg-gray-100 rounded-md transition-colors"
+              >
+                <svg className={`w-4 h-4 transition-transform ${sidebarCollapsed ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                </svg>
+              </button>
             </div>
 
-          {!sidebarCollapsed && (
-            <>
-              <div className="flex space-x-2 mb-4">
-                <Link 
-                  href="/editor" 
-                  className="flex-1 px-3 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 transition-colors text-center"
-                >
-                  New Page
-                </Link>
-                <button
-                  onClick={() => setShowNewFolderInput(!showNewFolderInput)}
-                  className="px-3 py-2 bg-green-600 text-white text-sm font-medium rounded-md hover:bg-green-700 transition-colors"
-                >
-                  +
-                </button>
-              </div>
-
-              {/* New Folder Input */}
-              {showNewFolderInput && (
-                <div className="space-y-2">
-                  <input
-                    type="text"
-                    value={newFolderName}
-                    onChange={(e) => setNewFolderName(e.target.value)}
-                    placeholder="Folder name"
-                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') createFolder();
-                      if (e.key === 'Escape') setShowNewFolderInput(false);
-                    }}
-                  />
-                  <div className="flex space-x-2">
-                    <button
-                      onClick={createFolder}
-                      disabled={isCreatingFolder || !newFolderName.trim()}
-                      className="flex-1 px-3 py-2 bg-green-600 text-white text-sm rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {isCreatingFolder ? 'Creating...' : 'Create'}
-                    </button>
-                    <button
-                      onClick={() => {
-                        setShowNewFolderInput(false);
-                        setNewFolderName('');
-                      }}
-                      className="px-3 py-2 bg-gray-300 text-gray-700 text-sm rounded-md hover:bg-gray-400"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              )}
-            </>
-          )}
-        </div>
-
-        {/* Sidebar Navigation */}
-        <div className="flex-1 overflow-y-auto">
-          {sidebarCollapsed ? (
-            // Collapsed sidebar - just icons
-            <div className="p-2 space-y-1">
-              {sidebarItems.slice(0, 8).map((item) => (
-                <button
-                  key={item.id}
-                  onClick={() => setSelectedItem(item.id)}
-                  className={`w-full p-3 rounded-md transition-colors ${
-                    selectedItem === item.id ? 'bg-blue-100 text-blue-900' : 'text-gray-600 hover:bg-gray-100'
-                  }`}
-                  title={item.name}
-                >
-                  <span className="text-lg">{item.icon}</span>
-                </button>
-              ))}
-            </div>
-          ) : (
-            // Full sidebar
-            <div className="p-4 space-y-1">
-              {sidebarItems.map((item) => (
-                <div
-                  key={item.id}
-                  className={`
-                    flex items-center justify-between px-3 py-2 text-sm cursor-pointer
-                    rounded-md transition-colors duration-150
-                    ${selectedItem === item.id ? 'bg-blue-100 text-blue-900 font-medium' : 'text-gray-700 hover:bg-gray-100'}
-                    ${dropTarget === item.id ? 'bg-green-50 ring-2 ring-green-300' : ''}
-                  `}
-                  style={{ paddingLeft: `${12 + (item.level * 16)}px` }}
-                  onClick={() => setSelectedItem(item.id)}
-                  onDragOver={(e) => item.type === 'folder' && handleDragOver(e, item.id)}
-                  onDrop={(e) => item.type === 'folder' && handleDrop(e, item.id)}
-                  draggable={item.type === 'page'}
-                  onDragStart={(e) => {
-                    if (item.type === 'page') {
-                      const pageId = parseInt(item.id.replace('page-', ''));
-                      handleDragStart(e, 'page', pageId, item.folderId);
-                    }
-                  }}
-                  onDragEnd={handleDragEnd}
-                >
-                  <div className="flex items-center min-w-0">
-                    <span className="mr-2 flex-shrink-0">{item.icon}</span>
-                    <span className="truncate">{item.name}</span>
-                  </div>
-                  {item.pageCount !== undefined && item.pageCount > 0 && (
-                    <span className="text-xs text-gray-500 bg-gray-200 px-2 py-0.5 rounded-full flex-shrink-0">
-                      {item.pageCount}
-                    </span>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Sidebar Footer */}
-        {!sidebarCollapsed && (
-          <div className="p-4 border-t border-gray-200">
-            <button
-              onClick={() => exportPages(false)}
-              disabled={isExporting || pages.length === 0}
-              className="w-full px-3 py-2 bg-gray-600 text-white text-sm font-medium rounded-md hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              {isExporting ? 'Exporting...' : 'Export Pages'}
-            </button>
+            {!sidebarCollapsed && (
+              <Link 
+                href="/editor" 
+                className="block w-full px-3 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 transition-colors text-center"
+              >
+                New Page
+              </Link>
+            )}
           </div>
-        )}
-      </div>
 
-      {/* Main Content */}
-      <div className="flex-1 flex flex-col">
-        {/* Drag indicator */}
-        {isDragging && (
-          <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 bg-blue-600 text-white px-4 py-2 rounded-lg shadow-lg">
-            <div className="flex items-center space-x-2">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
-              </svg>
-              <span>Drag to folder to organize</span>
+          {/* Sidebar Content */}
+          <div className="flex-1 overflow-y-auto">
+            {sidebarItems.length === 0 ? (
+              <div className="flex items-center justify-center p-4 h-full">
+                <div className="text-center text-gray-500">
+                  <div className="text-4xl mb-4">📝</div>
+                  <p className="text-sm">No content yet</p>
+                  <Link 
+                    href="/editor" 
+                    className="mt-4 inline-block text-blue-600 hover:text-blue-500 text-sm"
+                  >
+                    Create your first page
+                  </Link>
                 </div>
+              </div>
+            ) : (
+              <div className="p-4 space-y-1">
+                {sidebarItems.map((item) => (
+                  <div
+                    key={item.id}
+                    className={`
+                      flex items-center justify-between px-3 py-2 text-sm cursor-pointer
+                      rounded-md transition-colors duration-150
+                      ${selectedItem === item.id ? 'bg-blue-100 text-blue-900 font-medium' : 'text-gray-700 hover:bg-gray-100'}
+                    `}
+                    style={{ paddingLeft: `${12 + (item.level * 16)}px` }}
+                    onClick={() => setSelectedItem(item.id)}
+                  >
+                    <div className="flex items-center min-w-0">
+                      <span className="mr-2 flex-shrink-0">{item.icon}</span>
+                      <span className="truncate">{item.name}</span>
+                    </div>
+                    {item.pageCount !== undefined && item.pageCount > 0 && (
+                      <span className="text-xs text-gray-500 bg-gray-200 px-2 py-0.5 rounded-full flex-shrink-0">
+                        {item.pageCount}
+                      </span>
+                    )}
+                  </div>
+                ))}
               </div>
             )}
-            
-        {/* Main Header */}
-        <div className="bg-white border-b border-gray-200 px-8 py-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-3xl font-bold text-gray-900">{getCurrentViewName()}</h2>
-              <p className="text-gray-600 mt-1">
-                {displayedPages.length} {displayedPages.length === 1 ? 'page' : 'pages'}
-                {displayedPages.length > 1 && (
-                  <span className="ml-2">• Viewing page {selectedPageIndex + 1}</span>
-                )}
-              </p>
-            </div>
           </div>
+
+          {/* Sidebar Footer */}
+          {!sidebarCollapsed && (
+            <div className="p-4 border-t border-gray-200 space-y-2">
+              <div className="flex items-center justify-between text-sm text-gray-500">
+                <span className="truncate">{user?.email}</span>
+                <button
+                  onClick={handleSignOut}
+                  className="text-red-600 hover:text-red-500 ml-2"
+                  title="Sign out"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
-        {/* Content Area */}
-        <div className="flex-1 p-8 overflow-y-auto">
-          {displayedPages.length === 0 ? (
-            <div className="text-center py-16">
-              <div className="text-6xl mb-4">
-                {selectedItem === 'trash' ? '🗑️' : 
-                 selectedItem === 'uncategorized' ? '📄' : 
-                 selectedItem === 'all' ? '📋' : '📁'}
+        {/* Main Content */}
+        <div className="flex-1 flex flex-col">
+          {/* Main Header */}
+          <div className="bg-white border-b border-gray-200 px-8 py-6">
+                          <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-3xl font-bold text-gray-900">
+                    {selectedItem === 'trash' ? 'Trash' : 
+                     selectedItem.startsWith('folder-') ? 
+                       folders.find(f => f.id === parseInt(selectedItem.replace('folder-', '')))?.name || 'Folder' :
+                     'Dashboard'}
+                  </h2>
+                  <p className="text-gray-600 mt-1">
+                    {displayedPages.length} {displayedPages.length === 1 ? 'page' : 'pages'}
+                  </p>
+                </div>
               </div>
-              <h3 className="text-xl font-semibold text-gray-900 mb-2">
-                {selectedItem === 'trash' ? 'Trash is empty' :
-                 selectedItem === 'uncategorized' ? 'No uncategorized pages' :
-                 selectedItem === 'all' ? 'No pages yet' : 'This folder is empty'}
-              </h3>
-              <p className="text-gray-600 mb-6">
-                {selectedItem === 'all' ? 'Create your first page to get started.' :
-                 selectedItem === 'trash' ? 'Deleted pages will appear here.' :
-                 'Move pages here or create new ones to organize your content.'}
-              </p>
-              {selectedItem === 'all' && (
-                <Link 
-                  href="/editor" 
-                  className="inline-block px-6 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors"
-                >
-                  Create Your First Page
-                </Link>
-              )}
-            </div>
-          ) : (
-            <div className="max-w-4xl mx-auto">
-              {/* Display single page as a preview card */}
-              {displayedPages[selectedPageIndex] && (() => {
-                const page = displayedPages[selectedPageIndex];
-                const metadata = generatePageMetadata(page);
-                const isPageDragged = draggedItem && draggedItem.type === 'page' && draggedItem.id === page.id;
-                  
+          </div>
+
+          {/* Content Area */}
+          <div className="flex-1 p-8 overflow-y-auto">
+            {displayedPages.length === 0 ? (
+              <div className="text-center py-16">
+                <div className="text-6xl mb-4">
+                  {selectedItem === 'trash' ? '🗑️' : '✨'}
+                </div>
+                <h3 className="text-xl font-semibold text-gray-900 mb-2">
+                  {selectedItem === 'trash' ? 'Trash is empty' : 'Welcome to Borrd'}
+                </h3>
+                <p className="text-gray-600 mb-6">
+                  {selectedItem === 'trash' 
+                    ? 'Deleted pages will appear here.' 
+                    : 'Create your first page to get started.'
+                  }
+                </p>
+                {selectedItem !== 'trash' && (
+                  <Link 
+                    href="/editor" 
+                    className="inline-block px-6 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors"
+                  >
+                    Create Your First Page
+                  </Link>
+                )}
+              </div>
+            ) : (
+              <div className="max-w-4xl mx-auto space-y-6">
+                {displayedPages.map((page) => {
+                  const metadata = generatePageMetadata(page);
                   return (
                     <div 
                       key={page.id} 
-                      className={`
-                      bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-all duration-300
-                      ${!isTrashView ? "cursor-pointer" : ""}
-                        ${isPageDragged ? "opacity-50" : ""}
-                      `}
-                    draggable={!isTrashView}
-                    onDragStart={(e) => !isTrashView && handleDragStart(e, 'page', page.id, page.folder_id)}
-                      onDragEnd={handleDragEnd}
+                      className="bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md transition-all duration-300"
                     >
-                    {/* Page Header */}
-                    <div className="p-6 border-b border-gray-100">
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center space-x-3 mb-2">
-                            <span className="text-2xl">📄</span>
-                            <h1 className="text-2xl font-bold text-gray-900 truncate">
-                              {page.slug}
-                            </h1>
-                          </div>
-                          <p className="text-sm text-gray-500 mb-4">
-                            <span className="font-mono text-blue-600">/{page.slug}</span>
-                          </p>
-                          
-                          {/* Metadata */}
-                          <div className="flex items-center space-x-6 text-sm text-gray-500">
-                            <div className="flex items-center space-x-1">
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                              </svg>
-                              <span>{metadata.views} views</span>
+                      <div className="p-6 border-b border-gray-100">
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center space-x-3 mb-2">
+                              <span className="text-2xl">📄</span>
+                              <h1 className="text-2xl font-bold text-gray-900 truncate">
+                                {page.slug}
+                              </h1>
                             </div>
-                            <div className="flex items-center space-x-1">
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                              </svg>
-                              <span>{metadata.readTime} min read</span>
-                            </div>
-                            <div className="flex items-center space-x-1">
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                              </svg>
-                              <span>Created {new Date(page.created_at!).toLocaleDateString()}</span>
-                            </div>
-                            {page.updated_at && page.updated_at !== page.created_at && (
+                            <p className="text-sm text-gray-500 mb-4">
+                              <span className="font-mono text-blue-600">/{page.slug}</span>
+                            </p>
+                            
+                            <div className="flex items-center space-x-6 text-sm text-gray-500">
                               <div className="flex items-center space-x-1">
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                                 </svg>
-                                <span>Updated {new Date(page.updated_at).toLocaleDateString()}</span>
+                                <span>Created {new Date(page.created_at!).toLocaleDateString()}</span>
                               </div>
-                            )}
-                            {isTrashView && page.deleted_at && (
-                              <div className="flex items-center space-x-1 text-red-600">
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                </svg>
-                                <span>Deleted {new Date(page.deleted_at).toLocaleDateString()}</span>
-                              </div>
-                            )}
+                              {page.updated_at && page.updated_at !== page.created_at && (
+                                <div className="flex items-center space-x-1">
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                  </svg>
+                                  <span>Updated {new Date(page.updated_at).toLocaleDateString()}</span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                          
+                          <div className="flex items-center space-x-3 ml-4">
+                            <Link 
+                              href={`/${page.slug}`}
+                              className="px-4 py-2 bg-blue-100 text-blue-700 text-sm font-medium rounded-lg hover:bg-blue-200 transition-colors"
+                            >
+                              View Page
+                            </Link>
+                            <Link 
+                              href={`/editor?slug=${page.slug}`}
+                              className="px-4 py-2 bg-gray-100 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-200 transition-colors"
+                            >
+                              Edit
+                            </Link>
                           </div>
                         </div>
-                        
-                        <div className="flex items-center space-x-3 ml-4">
-                          {isTrashView ? (
-                            <button
-                              onClick={() => restorePage(page.id)}
-                              className="px-4 py-2 bg-green-100 text-green-700 text-sm font-medium rounded-lg hover:bg-green-200 transition-colors"
-                            >
-                              Restore
-                            </button>
+                      </div>
+
+                      <div className="p-6">
+                        <div className="prose prose-sm max-w-none">
+                          {page.markdown && page.markdown.trim() ? (
+                            <div className="text-gray-600 leading-relaxed">
+                              {truncateContent(page.markdown, 300)}
+                            </div>
                           ) : (
-                            <>
-                              <Link 
-                                href={`/${page.slug}`}
-                                className="px-4 py-2 bg-blue-100 text-blue-700 text-sm font-medium rounded-lg hover:bg-blue-200 transition-colors"
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                View Page
-                              </Link>
-                              <Link 
-                                href={`/editor?slug=${page.slug}`}
-                                className="px-4 py-2 bg-gray-100 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-200 transition-colors"
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                Edit
-                              </Link>
-                            </>
+                            <div className="text-gray-500 italic text-center py-8">
+                              This page is empty. Click "Edit" to add content.
+                            </div>
                           )}
                         </div>
                       </div>
                     </div>
-
-                    {/* Page Preview */}
-                    <div className="p-6">
-                      <div className="prose prose-sm max-w-none">
-                        {page.markdown && page.markdown.trim() ? (
-                          <div className="space-y-4">
-                            {/* Truncated content preview */}
-                            <div className="text-gray-600 leading-relaxed">
-                              {truncateContent(page.markdown, 300)}
-              </div>
-
-                            {/* Full markdown preview (first 1000 chars) */}
-                            {page.markdown.length > 300 && (
-                              <div className="border-t border-gray-100 pt-4">
-                                <h4 className="text-sm font-medium text-gray-900 mb-3">Preview:</h4>
-                                <div className="max-h-64 overflow-hidden relative">
-                                  <CustomMarkdown>
-                                    {page.markdown.substring(0, 1000) + (page.markdown.length > 1000 ? '...' : '')}
-                                  </CustomMarkdown>
-                                  {page.markdown.length > 1000 && (
-                                    <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-white to-transparent"></div>
-                                  )}
-                                </div>
+                  );
+                })}
               </div>
             )}
           </div>
-                        ) : (
-                          <div className="text-gray-500 italic text-center py-8">
-                            This page is empty. Click "Edit" to add content.
-          </div>
-        )}
-      </div>
-            </div>
-          </div>
-                );
-              })()}
-            </div>
-          )}
         </div>
       </div>
-    </div>
+    </ProtectedRoute>
   );
 } 

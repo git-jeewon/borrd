@@ -1,21 +1,23 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import { createClient } from '@supabase/supabase-js';
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-const supabase = createClient(supabaseUrl, supabaseServiceKey);
+import { getAuthenticatedUser, supabase } from '../../lib/auth';
 
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
 ) {
+  // Check authentication
+  const user = await getAuthenticatedUser(req);
+  if (!user) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
   try {
     switch (req.method) {
       case 'GET':
-        // List all folders in hierarchical structure
+        // List all folders for the authenticated user
         const { data: folders, error: fetchError } = await supabase
           .from('folders')
           .select('*')
+          .eq('user_id', user.id)
           .order('name');
 
         if (fetchError) {
@@ -40,12 +42,13 @@ export default async function handler(
           });
         }
 
-        // Check if folder with this name already exists at the top level
+        // Check if folder with this name already exists at the top level for this user
         // Since we only create top-level folders now, parent_id is always null
         const { data: existingFolder, error: checkError } = await supabase
           .from('folders')
           .select('id')
           .eq('name', name.trim())
+          .eq('user_id', user.id)
           .is('parent_id', null)
           .single();
 
@@ -67,7 +70,8 @@ export default async function handler(
           .from('folders')
           .insert({ 
             name: name.trim(),
-            parent_id: null
+            parent_id: null,
+            user_id: user.id
           })
           .select()
           .single();
@@ -92,33 +96,36 @@ export default async function handler(
           return res.status(400).json({ error: 'Invalid folder ID' });
         }
 
-        // Check if folder exists and get parent info
+        // Check if folder exists and belongs to the user
         const { data: folderToDelete, error: folderError } = await supabase
           .from('folders')
           .select('id, name, parent_id')
           .eq('id', folderIdNum)
+          .eq('user_id', user.id)
           .single();
 
         if (folderError || !folderToDelete) {
           return res.status(404).json({ error: 'Folder not found' });
         }
 
-        // Move all pages in this folder to uncategorized (null folder_id)
+        // Move all pages in this folder to uncategorized (null folder_id) for this user
         const { error: updatePagesError } = await supabase
           .from('pages')
           .update({ folder_id: null })
-          .eq('folder_id', folderIdNum);
+          .eq('folder_id', folderIdNum)
+          .eq('user_id', user.id);
 
         if (updatePagesError) {
           console.error('Error updating pages:', updatePagesError);
           return res.status(500).json({ error: 'Failed to update pages' });
         }
 
-        // Move all subfolders to the parent folder (or root if no parent)
+        // Move all subfolders to the parent folder (or root if no parent) for this user
         const { error: updateSubfoldersError } = await supabase
           .from('folders')
           .update({ parent_id: folderToDelete.parent_id })
-          .eq('parent_id', folderIdNum);
+          .eq('parent_id', folderIdNum)
+          .eq('user_id', user.id);
 
         if (updateSubfoldersError) {
           console.error('Error updating subfolders:', updateSubfoldersError);
@@ -129,7 +136,8 @@ export default async function handler(
         const { error: deleteError } = await supabase
           .from('folders')
           .delete()
-          .eq('id', folderIdNum);
+          .eq('id', folderIdNum)
+          .eq('user_id', user.id);
 
         if (deleteError) {
           console.error('Error deleting folder:', deleteError);

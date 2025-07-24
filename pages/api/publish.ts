@@ -1,16 +1,15 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import { createClient } from '@supabase/supabase-js';
-
-// Initialize Supabase client
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-
-const supabase = createClient(supabaseUrl, supabaseServiceKey);
+import { getAuthenticatedUser, supabase } from '../../lib/auth';
 
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
 ) {
+  // Check authentication
+  const user = await getAuthenticatedUser(req);
+  if (!user) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
   // Only allow POST requests
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -33,12 +32,13 @@ export default async function handler(
       return res.status(400).json({ error: 'slug must contain only letters, numbers, hyphens, and underscores' });
     }
 
-    // Validate folderId if provided
+    // Validate folderId if provided (must belong to user)
     if (folderId && typeof folderId === 'number') {
       const { data: folder, error: folderError } = await supabase
         .from('folders')
         .select('id')
         .eq('id', folderId)
+        .eq('user_id', user.id)
         .single();
 
       if (folderError || !folder) {
@@ -46,11 +46,12 @@ export default async function handler(
       }
     }
 
-    // Check if a page with this slug already exists
+    // Check if a page with this slug already exists for this user
     const { data: existingPage, error: fetchError } = await supabase
       .from('pages')
       .select('id, slug')
       .eq('slug', slug)
+      .eq('user_id', user.id)
       .single();
 
     if (existingPage && !fetchError) {
@@ -88,7 +89,8 @@ export default async function handler(
       .insert({
         slug,
         markdown,
-        folder_id: folderId || null
+        folder_id: folderId || null,
+        user_id: user.id
       });
 
     if (insertError) {

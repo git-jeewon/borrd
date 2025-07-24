@@ -53,6 +53,7 @@ export const getServerSideProps: GetServerSideProps<SlugPageProps> = async ({ pa
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     // Fetch the page with the given slug
+    // Note: Pages are public for now, not filtered by user
     const { data: page, error } = await supabase
       .from('pages')
       .select('*')

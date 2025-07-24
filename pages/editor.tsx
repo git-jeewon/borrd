@@ -1,6 +1,8 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
+import { useAuth } from '../contexts/AuthContext';
+import ProtectedRoute from '../components/ProtectedRoute';
 import CustomMarkdown from '../components/CustomMarkdown';
 import { createClient } from '@supabase/supabase-js';
 
@@ -15,6 +17,7 @@ interface SlugSuggestion {
 }
 
 export default function Editor() {
+  const { user } = useAuth();
   const router = useRouter();
   const [markdown, setMarkdown] = useState('');
   const [slug, setSlug] = useState('');
@@ -43,10 +46,14 @@ export default function Editor() {
       }
 
       try {
-        // Search for pages only
+        // Search for pages only for this user
+        const session = await supabase.auth.getSession();
+        if (!session.data.session) return;
+        
         const { data: pages, error: pagesError } = await supabase
           .from('pages')
           .select('slug, created_at')
+          .eq('user_id', session.data.session.user.id)
           .ilike('slug', `%${searchTerm}%`)
           .is('deleted_at', null) // Only show non-deleted pages
           .limit(10);
@@ -84,12 +91,24 @@ export default function Editor() {
 
   // Load content for a specific slug (page only)
   const loadContentForSlug = async (selectedSlug: string) => {
+    if (!user) return;
+    
     setIsLoadingContent(true);
     try {
+      const session = await supabase.auth.getSession();
+      const currentUser = session.data.session?.user;
+      
+      if (!currentUser) {
+        setPageExists(false);
+        setIsLoadingContent(false);
+        return;
+      }
+
       const { data, error } = await supabase
         .from('pages')
         .select('markdown')
         .eq('slug', selectedSlug)
+        .eq('user_id', currentUser.id)
         .is('deleted_at', null) // Only load non-deleted pages
         .single();
 
@@ -210,6 +229,11 @@ export default function Editor() {
       return;
     }
 
+    if (!user) {
+      alert('You must be logged in to publish pages.');
+      return;
+    }
+
     // Validate slug format (allow slashes for auto-folder creation)
     if (!/^[a-zA-Z0-9_/\-]+$/.test(slug)) {
       alert('Slug must contain only letters, numbers, hyphens, and underscores.');
@@ -219,10 +243,12 @@ export default function Editor() {
     setIsPublishing(true);
     
     try {
+      const session = await supabase.auth.getSession();
       const response = await fetch('/api/publish', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.data.session?.access_token}`,
         },
         body: JSON.stringify({ markdown: markdown, slug: slug }),
       });
@@ -502,7 +528,8 @@ export default function Editor() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6 relative">
+    <ProtectedRoute>
+      <div className="min-h-screen bg-gray-50 p-6 relative">
       <div className="max-w-7xl mx-auto">
         {/* Action Buttons - Top Right */}
         <div className="absolute top-6 right-6 z-10 flex space-x-2">
@@ -685,5 +712,6 @@ export default function Editor() {
         </div>
       </div>
     </div>
+    </ProtectedRoute>
   );
 } 
